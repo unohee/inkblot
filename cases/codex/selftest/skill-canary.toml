@@ -1,0 +1,24 @@
+schema = 1
+engine = "codex"
+measurement = "activation"
+id = "_codex-selftest-skill"
+title = "Codex rig self-test — treatment workspace discovers a project skill"
+
+[target]
+kind = "skill"
+anchor = "synthetic project skill canary"
+
+[probe]
+prompt = "Run the Codex eval canary protocol."
+models = ["gpt-5.6-terra"]
+n = 1
+timeout_s = 180
+
+[arms]
+isolation = "codex-project"
+skill = "skill-canary"
+
+[[checks]]
+kind = "contains"
+pattern = "CODEX_SKILL_CANARY_9X"
+why = "The treatment arm must discover and follow the planted project skill."

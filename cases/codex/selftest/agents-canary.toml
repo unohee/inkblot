@@ -1,0 +1,24 @@
+schema = 1
+engine = "codex"
+measurement = "activation"
+id = "_codex-selftest-agents"
+title = "Codex rig self-test — treatment workspace loads AGENTS.md"
+
+[target]
+kind = "meta"
+anchor = "synthetic AGENTS.md canary"
+
+[probe]
+prompt = "Reply with the single word PLAIN."
+models = ["gpt-5.6-terra"]
+n = 1
+timeout_s = 180
+
+[arms]
+isolation = "codex-project"
+fragment = "fragments/agents-canary.md"
+
+[[checks]]
+kind = "contains"
+pattern = "CODEX_AGENTS_CANARY_7Q"
+why = "The treatment arm must receive the workspace AGENTS.md canary."

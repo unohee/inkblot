@@ -1,0 +1,49 @@
+schema = 1
+id = "_selftest-hook"
+title = "Mechanism check — a hook supplied via --settings actually fires and is observable"
+
+notes = """
+Verifies the second arm-construction path: hooks injected with `--settings`,
+observed through `--output-format stream-json --include-hook-events`. Hook cases
+in `cases/` are only trustworthy while this passes.
+
+Isolation is `settings-only`, not `safe-mode`: measured on claude 2.1.221,
+`--safe-mode` suppresses hooks even when they arrive via `--settings`, so both
+arms came out 0/3 for the wrong reason. `--setting-sources ""` keeps the injected
+hook alive while still dropping the user's own settings, and
+`--strict-mcp-config` keeps MCP servers out of the arm.
+
+This is the one case that enables tools. It runs in a fresh mkdtemp workspace
+with a fixed probe that writes a single file, which is why bypassPermissions is
+acceptable here and nowhere else.
+"""
+
+[target]
+kind = "meta"
+anchor = "runner.build_argv — --settings + --include-hook-events"
+
+[probe]
+prompt = "Create a file named note.txt whose entire contents are the word ok. Do nothing else."
+models = ["sonnet"]
+n = 3
+tools = ["Write"]
+permission_mode = "bypassPermissions"
+max_budget_usd = 0.15
+timeout_s = 180
+
+[arms]
+settings = "hook-settings.json"
+isolation = "settings-only"
+
+[[checks]]
+kind = "file_exists"
+path = "note.txt"
+why = "the probe must actually exercise the Write tool for a PostToolUse hook to have anything to fire on"
+
+[[checks]]
+kind = "hook_fired"
+pattern = "HOOKCANARY7"
+why = "the PostToolUse hook registered only in the treatment arm must appear in the event stream"
+
+[verdict]
+alpha = 0.05

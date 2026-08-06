@@ -1,0 +1,30 @@
+# Eval run artifacts (raw transcripts, per-trial JSON). Regenerate with `make eval`.
+results/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Local scratch
+trash/
+.DS_Store
+
+# Secrets
+.env
+
+# Local-only: the personal harness under measurement. The published repo ships
+# the rig and its selftests; your case corpus, fragments, and findings stay here.
+/CLAUDE.md
+/cases/*.toml
+/cases/*.json
+/cases/codex/*.toml
+/cases/fragments/
+/reports/
+/fixes/
+/.openswarm/
+/scripts/apply-claudemd-verdicts.py
+/scripts/test-live-hooks.sh

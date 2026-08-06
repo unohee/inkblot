@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo HOOKCANARY7-fired",
+            "timeout": 5000
+          }
+        ]
+      }
+    ]
+  }
+}
