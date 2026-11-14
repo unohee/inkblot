@@ -23,6 +23,7 @@ trash/
 /cases/*.json
 /cases/codex/*.toml
 /cases/fragments/
+/cases/constitution/
 /reports/
 /fixes/
 /.openswarm/

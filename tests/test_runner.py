@@ -403,3 +403,25 @@ def test_skill_without_project_isolation_is_rejected(tmp_path):
     path.write_text(body, encoding="utf-8")
     with pytest.raises(CaseError, match="project"):
         load_case(path)
+
+
+def test_parse_output_json_mode_accepts_message_list_envelope():
+    """claude 2.1.251 returns a list even for --output-format json."""
+    payload = json.dumps([
+        {"type": "system", "subtype": "init"},
+        {"type": "assistant", "message": {"content": [{"type": "text", "text": "ignored"}]}},
+        {"type": "result", "subtype": "success", "result": "line one\nline two",
+         "total_cost_usd": 0.01, "num_turns": 1},
+    ])
+    text, meta, hooks, tools = parse_output(payload, streaming=False)
+    assert text == "line one\nline two"
+    assert meta["total_cost_usd"] == 0.01
+    assert (hooks, tools) == ([], [])
+
+
+def test_unusable_reason_rejects_an_unparsed_envelope():
+    """A raw JSON envelope must not be scored: its newlines are escaped."""
+    from harness_eval.runner import unusable_reason
+    envelope = '[{"type":"result","result":"continue-on-error: true"}]'
+    assert "unparsed" in unusable_reason(0, envelope, "", {})
+    assert unusable_reason(0, "a normal answer", "", {"subtype": "success"}) == ""
