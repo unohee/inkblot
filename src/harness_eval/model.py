@@ -72,6 +72,10 @@ class Target:
     # mode. Measurement comments adjacent to a rule belong in the range too —
     # a control doc that still says "이 줄은 load-bearing" leaks the rule.
     excise_lines: tuple[tuple[int, int], ...] = ()
+    # Text that must still sit inside the excise_lines range. sha256 alone
+    # cannot catch a document that was edited and then re-pinned: the hash
+    # matches again while the line numbers now point at different text.
+    expect_substring: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -148,6 +152,19 @@ def _require(table: dict, key: str, path: Path) -> object:
     return table[key]
 
 
+def _parse_expect_substring(target_raw: dict, has_excise: bool, path: Path) -> tuple[str, ...]:
+    raw = target_raw.get("expect_substring")
+    if raw is None:
+        return ()
+    if isinstance(raw, str):
+        raw = [raw]
+    if not isinstance(raw, list) or not all(isinstance(s, str) and s.strip() for s in raw):
+        raise CaseError(f"{path}: target.expect_substring must be a non-empty string or a list of them")
+    if raw and not has_excise:
+        raise CaseError(f"{path}: target.expect_substring needs target.excise_lines")
+    return tuple(raw)
+
+
 def load_case(path: Path) -> Case:
     """Parse and validate one case file."""
     try:
@@ -178,6 +195,7 @@ def load_case(path: Path) -> Case:
     for (s1, e1), (s2, _) in zip(excise_lines, excise_lines[1:]):
         if s2 <= e1:
             raise CaseError(f"{path}: target.excise_lines ranges overlap at line {s2}")
+    expect_substring = _parse_expect_substring(target_raw, bool(excise_lines), path)
 
     probe = _require(raw, "probe", path)
     if not isinstance(probe, dict):
@@ -224,6 +242,7 @@ def load_case(path: Path) -> Case:
             anchor=str(target_raw.get("anchor", "")),
             sha256=target_raw.get("sha256"),
             excise_lines=tuple(excise_lines),
+            expect_substring=expect_substring,
         ),
         prompt=str(_require(probe, "prompt", path)),
         checks=tuple(checks),
@@ -341,7 +360,7 @@ class DriftReport:
     source: Path
     recorded: str | None
     current: str | None
-    status: str  # "ok" | "changed" | "missing" | "unrecorded"
+    status: str  # "ok" | "changed" | "missing" | "unrecorded" | "moved"
     extra: dict = field(default_factory=dict)
 
 
@@ -350,6 +369,10 @@ def check_drift(cases: list[Case]) -> list[DriftReport]:
 
     A changed hash does not mean the case is wrong — it means the measurement is
     stale and the fragment should be re-extracted before the verdict is trusted.
+
+    When the hash matches and the case declares target.expect_substring, the
+    excised range is read too: a document edited and then re-pinned keeps a
+    valid hash while excise_lines silently points at other text ("moved").
     """
     out: list[DriftReport] = []
     for case in cases:
@@ -365,5 +388,27 @@ def check_drift(cases: list[Case]) -> list[DriftReport]:
             status = "ok"
         else:
             status = "changed"
-        out.append(DriftReport(case.id, src, case.target.sha256, current, status))
+        extra: dict = {}
+        if status == "ok":
+            lost = excised_text_mismatch(case.target, src.read_text(encoding="utf-8"))
+            if lost:
+                status = "moved"
+                extra["missing"] = lost
+        out.append(DriftReport(case.id, src, case.target.sha256, current, status, extra))
     return out
+
+
+def excised_text_mismatch(target: Target, text: str) -> list[str]:
+    """Return the target.expect_substring entries absent from the excised range.
+
+    An empty list means the range still cuts what the case says it cuts, or the
+    case declares nothing to check. A range past the end of the document counts
+    as every expected string missing.
+    """
+    if not target.expect_substring or not target.excise_lines:
+        return []
+    try:
+        _, removed = excise(text, target.excise_lines)
+    except ValueError:
+        return list(target.expect_substring)
+    return [s for s in target.expect_substring if s not in removed]

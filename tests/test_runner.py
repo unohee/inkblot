@@ -403,3 +403,18 @@ def test_skill_without_project_isolation_is_rejected(tmp_path):
     path.write_text(body, encoding="utf-8")
     with pytest.raises(CaseError, match="project"):
         load_case(path)
+
+
+def test_excision_refuses_a_repinned_source_whose_cut_lines_moved(tmp_path):
+    from dataclasses import replace
+
+    from harness_eval.model import sha256_file
+    from harness_eval.runner import SourceDrifted
+    case = make_excision_case(tmp_path)
+    case = replace(case, target=replace(case.target, expect_substring=("RULE LINE",)))
+    materialize_system_prompt(case, CONTROL, tmp_path)  # range still cuts the rule
+
+    case.target.source.write_text("keep1\nnew text\nRULE LINE\n", encoding="utf-8")
+    case = replace(case, target=replace(case.target, sha256=sha256_file(case.target.source)))
+    with pytest.raises(SourceDrifted, match="no longer cuts"):
+        materialize_system_prompt(case, CONTROL, tmp_path)

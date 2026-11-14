@@ -35,7 +35,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from .checks import CheckResult, TrialContext, run_checks
-from .model import Case, excise, sha256_file
+from .model import Case, excise, excised_text_mismatch, sha256_file
 
 CONTROL = "control"
 TREATMENT = "treatment"
@@ -156,6 +156,13 @@ def materialize_system_prompt(case: Case, arm: str, prompt_dir: Path) -> Path | 
                 f"re-extract the case (line ranges are stale)"
             )
         doc = source.read_text(encoding="utf-8")
+        lost = excised_text_mismatch(case.target, doc)
+        if lost:
+            raise SourceDrifted(
+                f"{source}: target.excise_lines no longer cuts {lost!r} although the sha256 "
+                f"matches — the document was re-pinned after an edit; re-extract the case "
+                f"(line ranges are stale)"
+            )
         if arm == CONTROL:
             doc, _ = excise(doc, case.target.excise_lines)
         parts.append(doc.strip())

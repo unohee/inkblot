@@ -144,11 +144,15 @@ def cmd_drift(args) -> int:
     stale = 0
     by_id = {c.id: c for c in cases}
     for r in reports:
-        marker = {"ok": "ok  ", "changed": "STALE", "missing": "GONE", "unrecorded": "??  "}[r.status]
+        marker = {"ok": "ok  ", "changed": "STALE", "missing": "GONE", "unrecorded": "??  ",
+                  "moved": "MOVED"}[r.status]
         print(f"{marker} {r.case_id:<28} {r.source}")
         if r.status in {"changed", "missing"}:
             stale += 1
             print(f"      recorded={r.recorded} current={r.current}")
+        if r.status == "moved":
+            stale += 1
+            print(f"      sha256 matches but excise_lines no longer cuts {r.extra['missing']!r}")
         case = by_id.get(r.case_id)
         if args.verbose and case and case.mode == "excision" and r.status == "ok":
             from .model import excise
