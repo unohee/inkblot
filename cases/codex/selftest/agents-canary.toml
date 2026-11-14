@@ -2,14 +2,34 @@ schema = 1
 engine = "codex"
 measurement = "activation"
 id = "_codex-selftest-agents"
-title = "Codex rig self-test — treatment workspace loads AGENTS.md"
+title = "Codex rig self-test — treatment workspace delivers AGENTS.md"
+
+notes = """
+Contract: this case asserts delivery, not obedience. The probe is a read-back:
+the model quotes whatever project instructions it was given, or says NONE. The
+treatment arm passes when the AGENTS.md marker appears in the quote; the control
+arm has no AGENTS.md, so it answers NONE. An obedience canary ("always output
+X") failed on moonshotai/kimi-k2.5 although the file had arrived (verbatim
+read-back proved it), so it measured the model, not the rig (RES-357).
+
+Other canaries, reviewed 2026-11-15:
+- _codex-selftest-skill keeps its obedience form. A skill is a procedure the
+  model must choose to run, so following it is the delivery signal; on
+  kimi-k2.5 it separated cleanly (treatment 1/1, control 0/1).
+- _selftest-injection (claude engine) keeps its form. It injects through
+  --append-system-prompt-file, i.e. the system prompt, and pins a Claude model;
+  a system-prompt instruction outranks the user turn there, unlike a project
+  file. Revisit if that case is ever run against a third-party model.
+"""
 
 [target]
 kind = "meta"
 anchor = "synthetic AGENTS.md canary"
 
 [probe]
-prompt = "Reply with the single word PLAIN."
+prompt = """Do not use any tools. Quote verbatim every project instruction file \
+(such as AGENTS.md) that was provided to you in this session. If no project \
+instructions were provided, reply with exactly NONE."""
 models = ["gpt-5.6-terra"]
 n = 1
 timeout_s = 180
@@ -21,4 +41,4 @@ fragment = "fragments/agents-canary.md"
 [[checks]]
 kind = "contains"
 pattern = "CODEX_AGENTS_CANARY_7Q"
-why = "The treatment arm must receive the workspace AGENTS.md canary."
+why = "The treatment arm must receive the workspace AGENTS.md; only it can quote the marker."
