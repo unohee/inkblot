@@ -187,6 +187,16 @@ def parse_output(
             return stdout, {}, [], []
         if isinstance(payload, dict):
             return str(payload.get("result", "")), payload, [], []
+        if isinstance(payload, list):
+            # claude 2.1.251 returns the whole message list even under
+            # --output-format json; the trailing result event carries the answer.
+            # Before this was handled, every non-streaming trial was scored
+            # against the raw envelope, where the answer's newlines are escaped
+            # and cost/num_turns are lost. Line-anchored patterns then matched
+            # nothing and the run still produced a confident verdict.
+            for event in reversed(payload):
+                if isinstance(event, dict) and event.get("type") == "result":
+                    return str(event.get("result", "")), event, [], []
         return stdout, {}, [], []
 
     result_text = ""
@@ -272,6 +282,11 @@ def unusable_reason(returncode: int, result: str, stderr: str, meta: dict[str, A
         return f"claude subtype={meta.get('subtype')}: {result[:300]}"
     if not result.strip():
         return "empty result — nothing to score"
+    if not meta and result.lstrip()[:1] in "[{":
+        # parse_output fell back to the raw envelope. Scoring that text is worse
+        # than not scoring it: the answer is present but JSON-escaped, so every
+        # line-anchored or multiline pattern silently reads as "no match".
+        return "unparsed agent output — the result envelope was not recognised"
     return ""
 
 
