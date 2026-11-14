@@ -111,6 +111,12 @@ line ships in, does it still make a marginal difference?"* An addition-mode
 neighbours — that is not noise, that is the finding. Excision cases must pin
 `target.sha256`; the runner refuses to cut line ranges from a drifted document.
 
+A hash cannot catch a document that was edited and then re-pinned: the hash
+matches again while `excise_lines` now points at other text. Give excision
+cases `target.expect_substring` (a string or a list) naming text that must sit
+inside the cut range. `make drift` reports `MOVED` and the runner refuses to
+build the arms when any of it is missing from the range.
+
 ## How the ablation is isolated
 
 ```
@@ -205,7 +211,9 @@ Rules for cases that keep the results honest:
   one the harness ships. Provenance goes above a `---` separator in the fragment
   file; only what follows the separator is injected.
 - **Record `sha256` of the live source.** `make drift` then tells you when a
-  verdict has gone stale because the underlying rule was edited.
+  verdict has gone stale because the underlying rule was edited. For excision
+  cases also set `target.expect_substring`, so a re-pinned hash cannot hide
+  line ranges that moved.
 - **Ablate one thing.** Everything the treatment and control arms share belongs
   in `baseline_fragment`.
 - **`n >= 3` per arm** or `load-bearing` is unreachable at `alpha = 0.05`, no
@@ -294,8 +302,6 @@ they quote that configuration):
   `model_providers` block, `wire_api = "responses"` (`"chat"` was removed in
   codex 0.146.0), and an explicit `model_reasoning_effort`. Not wired into the
   runner yet.
-- **Content-aware drift.** `make drift` currently pins `target.sha256` only; a
-  re-pinned document can silently shift what `excise_lines` cuts.
 
 ## License
 

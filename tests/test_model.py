@@ -191,3 +191,66 @@ def test_overlapping_excise_ranges_are_rejected(tmp_path):
     path.write_text(body, encoding="utf-8")
     with pytest.raises(CaseError, match="overlap"):
         load_case(path)
+
+
+def _excision_case_with_expect(tmp_path, doc_text: str, expect: str):
+    src = tmp_path / "live.md"
+    src.write_text(doc_text, encoding="utf-8")
+    body = MINIMAL.replace(
+        'kind = "rule"',
+        f'kind = "rule"\nsource = "{src}"\nsha256 = "{sha256_file(src)}"\n'
+        f'excise_lines = [[2, 2]]\nexpect_substring = {expect}',
+    )
+    return src, load_case(write_case(tmp_path, body))
+
+
+def test_drift_flags_a_repinned_source_whose_excised_lines_moved(tmp_path):
+    """sha256 matches after a re-pin, yet line 2 now holds a different rule."""
+    from dataclasses import replace
+
+    src, case = _excision_case_with_expect(tmp_path, "keep\nRULE: no guessing\nkeep\n",
+                                           '"no guessing"')
+    report = check_drift([case])[0]
+    assert report.status == "ok"
+
+    # Edit the document, then re-pin the hash the way apply-claudemd-verdicts.py does.
+    src.write_text("keep\nunrelated new text\nRULE: no guessing\n", encoding="utf-8")
+    repinned = replace(case, target=replace(case.target, sha256=sha256_file(src)))
+    report = check_drift([repinned])[0]
+    assert report.status == "moved"
+    assert report.extra["missing"] == ["no guessing"]
+
+
+def test_drift_moved_when_excise_range_exceeds_the_repinned_document(tmp_path):
+    from dataclasses import replace
+
+    src, case = _excision_case_with_expect(tmp_path, "keep\nRULE\nkeep\n", '["RULE"]')
+    src.write_text("short\n", encoding="utf-8")
+    repinned = replace(case, target=replace(case.target, sha256=sha256_file(src)))
+    assert check_drift([repinned])[0].status == "moved"
+
+
+def test_drift_without_expect_substring_still_only_compares_sha(tmp_path):
+    src = tmp_path / "live.md"
+    src.write_text("a\nb\n", encoding="utf-8")
+    body = MINIMAL.replace('kind = "rule"',
+                           f'kind = "rule"\nsource = "{src}"\nsha256 = "{sha256_file(src)}"\n'
+                           f'excise_lines = [[2, 2]]')
+    assert check_drift([load_case(write_case(tmp_path, body))])[0].status == "ok"
+
+
+@pytest.mark.parametrize("value, match", [
+    ('""', "non-empty"),
+    ("[1]", "non-empty"),
+])
+def test_expect_substring_must_be_non_empty_text(tmp_path, value, match):
+    body = MINIMAL.replace('kind = "rule"',
+                           f'kind = "rule"\nexcise_lines = [[1, 1]]\nexpect_substring = {value}')
+    with pytest.raises(CaseError, match=match):
+        load_case(write_case(tmp_path, body))
+
+
+def test_expect_substring_needs_excise_lines(tmp_path):
+    body = MINIMAL.replace('kind = "rule"', 'kind = "rule"\nexpect_substring = "x"')
+    with pytest.raises(CaseError, match="needs target.excise_lines"):
+        load_case(write_case(tmp_path, body))
